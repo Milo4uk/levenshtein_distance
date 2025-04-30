@@ -1,53 +1,65 @@
 use futures_intrusive::channel::shared::oneshot_channel;
-use std::{borrow::Cow, collections::btree_map::Keys, convert::TryInto, default, str::FromStr};
+use std::convert::TryInto;
 use wgpu::util::DeviceExt;
 
 use crate::SHADER;
 
 const OVERFLOW: u32 = 0xffffffff;
 
-// pub async fn run_compute_shader() {
-//     let words = if std::env::args().len() <= 1 {
-//         let default = ["рыба".as_bytes(), "раб".as_bytes()];
+//fill the words up
+//we will fill them so they are even in length 
+//padding by the longest word, but for now it's 64
+const MAX: usize = 64;
+
+pub async fn run_compute_shader() {
+    let words = if std::env::args().len() <= 1 {
+        let default = vec!["hip".to_owned(), "hop".to_owned()];
+        println!("No words were provided, defaulting to {:?}", default);
+        default
+    } else {
+        std::env::args().collect()
+    };
+    let metrics = execute_gpu(words);
+    print!("Metrics: {:?}", metrics)
+}
+
+// pub async fn run() {
+//     let numbers = if std::env::args().len() <= 1 {
+//         let default = vec![1, 2, 3, 4];
+//         println!("No numbers were provided, defaulting to {:?}", default);
 //         default
 //     } else {
 //         std::env::args()
 //             .skip(1)
-//             .map(|s| u32::from_str(&s).expect("You must pass a list of two words!"))
+//             .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
 //             .collect()
 //     };
-//     let steps = execute_gpu(words);
-    
-// println!("levenshtein distance is equal to:", disp_steps.join(", "));
+
+//     let steps = execute_gpu(numbers);
+
+//     let disp_steps: Vec<String> = steps
+//         .iter()
+//         .map(|&n| match n {
+//             OVERFLOW => "OVERFLOW".to_string(),
+//             _ => n.to_string(),
+//         })
+//         .collect();
+
+//     println!("Steps: [{}]", disp_steps.join(", "));
 // }
 
-pub async fn run() {
-    let numbers = if std::env::args().len() <= 1 {
-        let default = vec![1, 2, 3, 4];
-        println!("No numbers were provided, defaulting to {:?}", default);
-        default
-    } else {
-        std::env::args()
-            .skip(1)
-            .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
-            .collect()
-    };
-
-    let steps = execute_gpu(numbers);
-
-    let disp_steps: Vec<String> = steps
-        .iter()
-        .map(|&n| match n {
-            OVERFLOW => "OVERFLOW".to_string(),
-            _ => n.to_string(),
-        })
-        .collect();
-
-    println!("Steps: [{}]", disp_steps.join(", "));
-}
-
-pub fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
+pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let shader_code = SHADER;
+    let mut bytes: Vec<u8> = Vec::with_capacity(words.len() * MAX);
+
+    // so, we fill the vector of byted words with zeroes to distinguish between words on the gpu side
+    // other option: we could pass another vector with starting indices of each word?
+    for w in words {
+        assert!(w.len() <= MAX, "word too long");
+        bytes.extend_from_slice(w.as_bytes());
+        // fill it up with zeroes
+        bytes.extend(core::iter::repeat(0).take(MAX - w.len())); 
+    }
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
 
@@ -74,7 +86,7 @@ pub fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         )),
     });
 
-    let slice_size = numbers.len() * std::mem::size_of::<u32>();
+    let slice_size = bytes.len() * std::mem::size_of::<u32>();
     let size = slice_size as wgpu::BufferAddress;
 
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -86,7 +98,8 @@ pub fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Storage Buffer"),
-        contents: bytemuck::cast_slice(&numbers),
+        // pass the byted words to the gpu
+        contents: &bytes,
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC,
@@ -96,6 +109,7 @@ pub fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         label: None,
         layout: None,
         module: &cs_module,
+        // the name of the function to execute
         entry_point: "main_cs",
     });
 
@@ -118,9 +132,10 @@ pub fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
-        cpass.insert_debug_marker("compute collatz iterations");
-        cpass.dispatch_workgroups(numbers.len() as u32, 1, 1); 
-}
+        cpass.insert_debug_marker("compute levenshtein distance");
+        // we will only use one workgroup for now, just to make it work
+        cpass.dispatch_workgroups(1, 1, 1);
+    }
 
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
