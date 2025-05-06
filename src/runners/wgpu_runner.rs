@@ -4,15 +4,16 @@ use wgpu::util::DeviceExt;
 
 use crate::SHADER;
 
-const OVERFLOW: u32 = 0xffffffff;
+// const OVERFLOW: u32 = 0xffffffff;
 
 //fill the words up
-//we will fill them so they are even in length 
+//we will fill them so they are even in length
 //padding by the longest word, but for now it's 64
 const MAX: usize = 64;
 
 pub async fn run_compute_shader() {
-    let words = if std::env::args().len() <= 1 {
+    //if they provided less than 2 words => warning
+    let words = if std::env::args().len() < 2 {
         let default = vec!["hip".to_owned(), "hop".to_owned()];
         println!("No words were provided, defaulting to {:?}", default);
         default
@@ -20,7 +21,7 @@ pub async fn run_compute_shader() {
         std::env::args().collect()
     };
     let metrics = execute_gpu(words);
-    print!("Metrics: {:?}", metrics)
+    print!("Metrics: {:?}", metrics.last().unwrap())
 }
 
 // pub async fn run() {
@@ -50,17 +51,18 @@ pub async fn run_compute_shader() {
 
 pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let shader_code = SHADER;
-    let mut bytes: Vec<u8> = Vec::with_capacity(words.len() * MAX);
+    let mut words_byted: Vec<u8> = Vec::with_capacity(words.len() * MAX);
 
     // so, we fill the vector of byted words with zeroes to distinguish between words on the gpu side
     // other option: we could pass another vector with starting indices of each word?
-    for w in words {
+    for w in &words {
         assert!(w.len() <= MAX, "word too long");
-        bytes.extend_from_slice(w.as_bytes());
+        words_byted.extend_from_slice(w.as_bytes());
         // fill it up with zeroes
-        bytes.extend(core::iter::repeat(0).take(MAX - w.len())); 
+        words_byted.extend(core::iter::repeat(0).take(MAX - w.len()));
     }
 
+    let bytes: &[u8] = bytemuck::cast_slice(&words_byted);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
 
     let adapter_options = &wgpu::RequestAdapterOptions::default();
@@ -86,7 +88,8 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         )),
     });
 
-    let slice_size = bytes.len() * std::mem::size_of::<u32>();
+    // double check logic later 
+    let slice_size = std::mem::size_of::<u32>() * MAX * words.len() / 4;
     let size = slice_size as wgpu::BufferAddress;
 
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -96,15 +99,23 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         mapped_at_creation: false,
     });
 
-    let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Storage Buffer"),
+    let byte_words = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Words in bytes"),
         // pass the byted words to the gpu
-        contents: &bytes,
+        contents: bytes,
         usage: wgpu::BufferUsages::STORAGE
             | wgpu::BufferUsages::COPY_DST
             | wgpu::BufferUsages::COPY_SRC,
     });
 
+    let out_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Final distance"),
+        size: std::mem::size_of::<u32>() as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    // layout none defaults to auto layout
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
         layout: None,
@@ -113,14 +124,21 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         entry_point: "main_cs",
     });
 
+    // bindings in shader must match the bindings in pipeline
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
-        entries: &[wgpu::BindGroupEntry {
-            binding: 0,
-            resource: storage_buffer.as_entire_binding(),
-        }],
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: byte_words.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: out_buffer.as_entire_binding(),
+            },
+        ],
     });
 
     let mut encoder =
@@ -137,14 +155,13 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
+    encoder.copy_buffer_to_buffer(&byte_words, 0, &staging_buffer, 0, size);
 
     queue.submit(Some(encoder.finish()));
 
     let buffer_slice = staging_buffer.slice(..);
 
     let (sender, receiver) = oneshot_channel();
-
     let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
         sender.send(result).unwrap();
     });
