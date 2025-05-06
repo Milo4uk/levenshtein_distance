@@ -21,7 +21,7 @@ pub async fn run_compute_shader() {
         std::env::args().collect()
     };
     let metrics = execute_gpu(words);
-    print!("Metrics: {:?}", metrics.last().unwrap())
+    print!("Metrics: {:?}", metrics)
 }
 
 // pub async fn run() {

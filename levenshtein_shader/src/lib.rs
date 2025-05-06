@@ -16,17 +16,17 @@ pub fn levenshtein(words: &[u32]) -> Option<usize> {
     let mut curr: [usize; MAX + 1] = [0; MAX + 1];
 
     // базовый алгоритм левенштейна из википедии
-    for i in 0..=MAX {
+    for i in 0..MAX {
         curr[0] = i as usize;
         let a = words[i]; 
-        for j in 1..=MAX {
+        for j in 0..MAX {
             let b =  words[MAX + j];
             let cost = if a != b { 1 } else { 0 };
 
             let del = curr[j] + 1;
             let ins = prev[j + 1] + 1;
             let sub = prev[j] + cost;
-            
+             
             // we remove min, cause it causes InvalidTypeWidth(1) error
             // future note!!!
             // use THE simplest language, imagine u'r writing in C
