@@ -18,6 +18,8 @@
 * Репозиторий, посвященный [rust-gpu](https://github.com/Rust-GPU/rust-gpu?tab=readme-ov-file)
 * Пример работы wgpu с Spir-V [hello-compute](https://github.com/gfx-rs/wgpu-rs/blob/master/examples/hello-compute/main.rs)
 * [Расстояние Левенштейна](https://ru.wikipedia.org/wiki/Расстояние_Левенштейна#Формула)
+* [WebGpu fundamentals](https://webgpufundamentals.org)
+* Документация [WebGpu](https://www.w3.org/TR/webgpu/)
 
 ---
 ### Запуск и компиляция шейдеров
