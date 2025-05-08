@@ -11,7 +11,7 @@ use crate::SHADER;
 //padding by the longest word, but for now it's 64
 const MAX: usize = 64;
 
-pub async fn run_compute_shader() {
+pub fn run_compute_shader() {
     //if they provided less than 2 words => warning
     let words = if std::env::args().len() < 2 {
         let default = vec!["hip".to_owned(), "hop".to_owned()];
@@ -20,7 +20,7 @@ pub async fn run_compute_shader() {
     } else {
         std::env::args().collect()
     };
-    let metrics = execute_gpu(words);
+    let metrics = pollster::block_on(execute_gpu(words));
     print!("Metrics: {:?}", metrics)
 }
 
@@ -49,7 +49,7 @@ pub async fn run_compute_shader() {
 //     println!("Steps: [{}]", disp_steps.join(", "));
 // }
 
-pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
+pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let shader_code = SHADER;
     let mut words_byted: Vec<u8> = Vec::with_capacity(words.len() * MAX);
 
@@ -65,21 +65,15 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let bytes: &[u8] = bytemuck::cast_slice(&words_byted);
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
 
-    let adapter_options = &wgpu::RequestAdapterOptions::default();
-    let adapter_future = instance.request_adapter(&adapter_options);
-    let adapter = pollster::block_on(adapter_future).unwrap();
+    let adapter = instance
+        .request_adapter(&Default::default())
+        .await
+        .expect("failed to create adapter");
 
-    let device_descriptor = wgpu::DeviceDescriptor::default();
-    let device_future = adapter.request_device(&device_descriptor, None);
-    let (device, queue) = pollster::block_on(device_future).unwrap();
-
-    let descriptor = wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::SpirV(std::borrow::Cow::Owned(
-            wgpu::util::make_spirv_raw(shader_code).to_vec().into(),
-        )),
-    };
-    let shader_module = device.create_shader_module(descriptor);
+    let (device, queue) = adapter
+        .request_device(&Default::default(), None)
+        .await
+        .expect("failed to create device");
 
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("SPIR-V Fragment Shader"),
@@ -88,10 +82,11 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         )),
     });
 
-    // double check logic later 
-    let slice_size = std::mem::size_of::<u32>() * MAX * words.len() / 4;
+    // double check logic later
+    let slice_size = std::mem::size_of::<u32>() * words.len() / 2;
     let size = slice_size as wgpu::BufferAddress;
 
+    // copy data from output buffer here
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size,
@@ -103,14 +98,12 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         label: Some("Words in bytes"),
         // pass the byted words to the gpu
         contents: bytes,
-        usage: wgpu::BufferUsages::STORAGE
-            | wgpu::BufferUsages::COPY_DST
-            | wgpu::BufferUsages::COPY_SRC,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
     });
 
     let out_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Final distance"),
-        size: std::mem::size_of::<u32>() as u64,
+        size,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
@@ -155,7 +148,7 @@ pub fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
-    encoder.copy_buffer_to_buffer(&byte_words, 0, &staging_buffer, 0, size);
+    encoder.copy_buffer_to_buffer(&out_buffer, 0, &staging_buffer, 0, size);
 
     queue.submit(Some(encoder.finish()));
 

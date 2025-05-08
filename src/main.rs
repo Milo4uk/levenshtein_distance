@@ -6,5 +6,5 @@ pub const SHADER: &[u8] = include_bytes!(env!("levenshtein_shader.spv"));
 
 fn main() {
     env_logger::init();
-    pollster::block_on(run_compute_shader());
+    run_compute_shader();
 }
