@@ -4,8 +4,6 @@ use wgpu::util::DeviceExt;
 
 use crate::SHADER;
 
-// const OVERFLOW: u32 = 0xffffffff;
-
 //fill the words up
 //we will fill them so they are even in length
 //padding by the longest word, but for now it's 64
@@ -23,31 +21,6 @@ pub fn run_compute_shader() {
     let metrics = pollster::block_on(execute_gpu(words));
     print!("Metrics: {:?}", metrics)
 }
-
-// pub async fn run() {
-//     let numbers = if std::env::args().len() <= 1 {
-//         let default = vec![1, 2, 3, 4];
-//         println!("No numbers were provided, defaulting to {:?}", default);
-//         default
-//     } else {
-//         std::env::args()
-//             .skip(1)
-//             .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
-//             .collect()
-//     };
-
-//     let steps = execute_gpu(numbers);
-
-//     let disp_steps: Vec<String> = steps
-//         .iter()
-//         .map(|&n| match n {
-//             OVERFLOW => "OVERFLOW".to_string(),
-//             _ => n.to_string(),
-//         })
-//         .collect();
-
-//     println!("Steps: [{}]", disp_steps.join(", "));
-// }
 
 pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let shader_code = SHADER;
@@ -104,7 +77,9 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let out_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Final distance"),
         size,
-        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+        usage: wgpu::BufferUsages::STORAGE
+            | wgpu::BufferUsages::COPY_SRC
+            | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
@@ -155,7 +130,7 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let buffer_slice = staging_buffer.slice(..);
 
     let (sender, receiver) = oneshot_channel();
-    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+    let _buffer_future = buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
         sender.send(result).unwrap();
     });
 
