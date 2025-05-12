@@ -35,7 +35,7 @@ pub async fn run() {
 async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let shader_code = SHADER;
     // Instantiates instance of WebGPU
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
@@ -46,7 +46,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
     //  `features` being the available features.
     let (device, queue) = adapter
-        .request_device(&Default::default(), None)
+        .request_device(&Default::default())
         .await
         .expect("failed to create device");
 
@@ -96,7 +96,9 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         label: None,
         layout: None,
         module: &cs_module,
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
+        cache: None,
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
     });
 
     // Instantiates the bind group, once again specifying the binding of buffers.
@@ -141,7 +143,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
-    device.poll(wgpu::Maintain::Wait);
+
+    device.poll(wgpu::PollType::Wait);
 
     if let Ok(()) = pollster::block_on(async {
         match receiver.receive().await.unwrap() {

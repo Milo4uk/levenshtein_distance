@@ -36,7 +36,7 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     }
 
     let bytes: &[u8] = bytemuck::cast_slice(&words_byted);
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
 
     let adapter = instance
         .request_adapter(&Default::default())
@@ -44,7 +44,7 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         .expect("failed to create adapter");
 
     let (device, queue) = adapter
-        .request_device(&Default::default(), None)
+        .request_device(&Default::default())
         .await
         .expect("failed to create device");
 
@@ -89,7 +89,9 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         layout: None,
         module: &cs_module,
         // the name of the function to execute
-        entry_point: "main_cs",
+        entry_point: Some("main_cs"),
+        cache: None,
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
     });
 
     // bindings in shader must match the bindings in pipeline
@@ -134,7 +136,7 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
         sender.send(result).unwrap();
     });
 
-    device.poll(wgpu::Maintain::Wait);
+    device.poll(wgpu::PollType::Wait);
 
     if let Ok(()) = pollster::block_on(async {
         match receiver.receive().await.unwrap() {
