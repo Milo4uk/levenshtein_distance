@@ -1,56 +1,69 @@
 #![no_std]
 
-use spirv_std::spirv;
+use glam::UVec3;
+use spirv_std::{glam, spirv};
 
 //fill the words up? the padding rn is 64
-const MAX: usize = 64;
+const WORDS_PADDING: usize = 64;
 
 /// Возвращает метрику, разность по модулю между двумя последовательностями символов
-pub fn levenshtein(words: &[u32]) -> Option<usize> {
+pub fn levenshtein(words: &[u32], start: usize) -> u32 {
     // String - UTF-8–encoded
     // problems: multi-byte characters in utf-8
-    // this only works for one byte per one character
+    // this only works for ASCII characters
     // to note: doesn't support slicing
 
-    let mut prev: [usize; MAX + 1] = [0; MAX + 1];
-    let mut curr: [usize; MAX + 1] = [0; MAX + 1];
+    let mut prev = [0u32; WORDS_PADDING + 1];
+    let mut curr = [0u32; WORDS_PADDING + 1];
 
     // базовый алгоритм левенштейна из википедии
-    for i in 0..MAX {
-        curr[0] = i as usize;
-        let a = words[i]; 
-        for j in 0..MAX {
-            let b =  words[MAX + j];
-            let cost = if a != b { 1 } else { 0 };
+    for i in 0..WORDS_PADDING {
+        // case when start = 0
+        // we were reading garbage data all along
+        // threads with global indices showed us that
+        let a = if i == 0 {
+            0u32
+        } else {
+            words[start + i - 1]
+        };
+        curr[0] = i as u32;
+        for j in 0..WORDS_PADDING {
+            let b = words[start + WORDS_PADDING + j - 1];
 
-            let del = curr[j] + 1;
-            let ins = prev[j + 1] + 1;
-            let sub = prev[j] + cost;
-             
+            let cost: u32 = if a != b { 1 } else { 0 };
+
+            let del: u32 = curr[j] + 1;
+            let ins: u32 = prev[j + 1] + 1;
+            let sub: u32 = prev[j] + cost;
+
             // we remove min, cause it causes InvalidTypeWidth(1) error
             // future note!!!
             // use THE simplest language, imagine u'r writing in C
             // imagine like you have one leg shot (u'r the crab) and disabled in means of using Rust
             let best_del_ins = if del < ins { del } else { ins };
-            let best = if best_del_ins < sub { best_del_ins } else { sub };
-
+            let best = if best_del_ins < sub {
+                best_del_ins
+            } else {
+                sub
+            };
             curr[j + 1] = best;
         }
-        for j in 0..=MAX {
+        for j in 0..=WORDS_PADDING {
             prev[j] = curr[j];
         }
     }
-    Some(prev[MAX])
+    prev[WORDS_PADDING]
 }
 
-#[spirv(compute(threads(1)))]
+#[spirv(compute(threads(64)))]
 pub fn main_cs(
-    // #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] words: &mut [u32], // слова единым array
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut usize, // метрика левенштейна для пар слов
+    #[spirv(global_invocation_id)] id: UVec3,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] words: &[u32], // слова единым array
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32], // метрика левенштейна для пар слов
 ) {
-    // we don't need index rn
-    // let index = id.x as usize;
+    // for each thread it's own id
+    let pair_idx = id.x as usize;
+    let start = pair_idx * WORDS_PADDING * 2;
 
-    *output = levenshtein(words).unwrap_or(100);
+    output[pair_idx] = levenshtein(words, start);
 }

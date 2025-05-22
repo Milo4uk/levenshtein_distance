@@ -1,5 +1,5 @@
 use futures_intrusive::channel::shared::oneshot_channel;
-use std::{borrow::Cow, convert::TryInto, str::FromStr};
+use std::{convert::TryInto, str::FromStr};
 use wgpu::util::DeviceExt;
 
 // Indicates a u32 overflow in an intermediate Collatz value
@@ -117,7 +117,10 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     {
-        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label: None, timestamp_writes: None });
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.insert_debug_marker("compute collatz iterations");
@@ -144,7 +147,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
 
-    device.poll(wgpu::PollType::Wait);
+    let _ = device.poll(wgpu::PollType::Wait);
 
     if let Ok(()) = pollster::block_on(async {
         match receiver.receive().await.unwrap() {
