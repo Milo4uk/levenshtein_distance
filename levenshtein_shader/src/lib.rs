@@ -1,14 +1,13 @@
 #![no_std]
 
 use glam::UVec3;
-use spirv_std::{glam, spirv};
+use spirv_std::{glam, number, spirv};
 
 //fill the words up? the padding rn is 64
 const WORDS_PADDING: usize = 64;
 
 /// Возвращает метрику, разность по модулю между двумя последовательностями символов
-pub fn levenshtein(words: &[u32], start: usize) -> u32 {
-    // String - UTF-8–encoded
+pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u32 {
     // problems: multi-byte characters in utf-8
     // this only works for ASCII characters
     // to note: doesn't support slicing
@@ -21,14 +20,14 @@ pub fn levenshtein(words: &[u32], start: usize) -> u32 {
         // case when start = 0
         // we were reading garbage data all along
         // threads with global indices showed us that
-        let a = if i == 0 {
-            0u32
-        } else {
-            words[start + i - 1]
-        };
+        let a = if i == 0 { 0u32 } else { words[start + i - 1] };
         curr[0] = i as u32;
         for j in 0..WORDS_PADDING {
-            let b = words[start + WORDS_PADDING + j - 1];
+            let b = if j == 0 {
+                0u32
+            } else {
+                words[compared_word_start + j - 1]
+            };
 
             let cost: u32 = if a != b { 1 } else { 0 };
 
@@ -55,7 +54,8 @@ pub fn levenshtein(words: &[u32], start: usize) -> u32 {
     prev[WORDS_PADDING]
 }
 
-#[spirv(compute(threads(64)))]
+// should get optimal for each different family of gpu
+#[spirv(compute(threads(32)))]
 pub fn main_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] words: &[u32], // слова единым array
@@ -63,7 +63,14 @@ pub fn main_cs(
 ) {
     // for each thread it's own id
     let pair_idx = id.x as usize;
-    let start = pair_idx * WORDS_PADDING * 2;
+    let start = pair_idx * WORDS_PADDING;
 
-    output[pair_idx] = levenshtein(words, start);
+    // we will do cartesian product
+    let number_of_words = words.len() / WORDS_PADDING;
+
+    for compared_word_index in 0..number_of_words {
+        let compared_word_start = compared_word_index * WORDS_PADDING;
+        let dist = levenshtein(words, start, compared_word_start);
+        output[pair_idx * number_of_words + compared_word_index] = dist;
+    }
 }

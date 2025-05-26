@@ -30,7 +30,6 @@ pub fn run_compute_shader() {
 }
 
 pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
-    let shader_code = SHADER;
     let mut words_byted: Vec<u32> = Vec::new();
 
     // so, we fill the vector of byted words with zeroes to distinguish between words on the gpu side
@@ -58,14 +57,15 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("SPIR-V Fragment Shader"),
         source: wgpu::ShaderSource::SpirV(std::borrow::Cow::Owned(
-            wgpu::util::make_spirv_raw(shader_code).to_vec().into(),
+            wgpu::util::make_spirv_raw(SHADER).to_vec().into(),
         )),
     });
 
     // BUFFER_ALIGNMENT is even with 4
     let num_of_pairs = words.len() / 2;
     // make sure it's even with 4
-    let slice_size = std::mem::size_of::<u32>() * num_of_pairs;
+    // we will do cartesian product of 'words'
+    let slice_size = std::mem::size_of::<u32>() * (words.len() * words.len());
     let size = slice_size as wgpu::BufferAddress;
 
     let byte_words = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -89,8 +89,7 @@ pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size,
-        usage: wgpu::BufferUsages::MAP_READ 
-            | wgpu::BufferUsages::COPY_DST,
+        usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
