@@ -1,21 +1,29 @@
 [package]
-name = "shade_first_example"
+name = "diploma_project"
 version = "0.1.0"
 edition = "2021"
 
 [workspace]
 resolver = "2"
-members = ["my_shader", "levenshtein_shader"]
+members = ["levenshtein_shader"]
 
 [dependencies]
 wgpu = { version = "25.0", features = ["spirv"] }
 env_logger = "0.11.7"
 pollster = "0.4.0"
 futures-intrusive = "0.5"
-bytemuck = "1.22.0"
+bytemuck = "1.23.0"
+levenshtein_shader = { path = "levenshtein_shader" } 
 
 [build-dependencies]
 spirv-builder = { version = "0.9", git = "https://github.com/Rust-GPU/rust-gpu.git" }
+
+[dev-dependencies]
+criterion = "0.6.0"
+
+[[bench]]
+name = "bench"
+harness = false  
 
 [profile.release.build-override]
 opt-level = 3

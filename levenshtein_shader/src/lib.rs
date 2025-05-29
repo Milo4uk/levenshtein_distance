@@ -1,9 +1,9 @@
 #![no_std]
 
 use glam::UVec3;
-use spirv_std::{glam, number, spirv};
+use spirv_std::{glam, spirv};
 
-//fill the words up? the padding rn is 64
+// words padding
 const WORDS_PADDING: usize = 64;
 
 /// Возвращает метрику, разность по модулю между двумя последовательностями символов
@@ -58,8 +58,10 @@ pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u
 #[spirv(compute(threads(32)))]
 pub fn main_cs(
     #[spirv(global_invocation_id)] id: UVec3,
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] words: &[u32], // слова единым array
-    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32], // метрика левенштейна для пар слов
+    // слова в байтах единым array
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] words: &[u32],
+    // метрика левенштейна для декартового произведения слов
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32],
 ) {
     // for each thread it's own id
     let pair_idx = id.x as usize;

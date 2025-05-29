@@ -1,39 +1,21 @@
+use crate::{SHADER, WORDS_PADDING};
 use futures_intrusive::channel::shared::oneshot_channel;
 use std::convert::TryInto;
 use wgpu::util::DeviceExt;
 
-use crate::SHADER;
-
-//fill the words up
-//we will fill them so they are even in length
-//padding by the longest word, but for now it's 64
-const WORDS_PADDING: usize = 64;
-
-/// Words shouls come in pairs, it prints an array of results for each pair
 pub fn run_compute_shader() {
-    // it reads them two from the start, the amount of words must be a multiple of 2 or it will just ignore the last one
-    // we will call this func from smwh else later, for now words are this:
-    let words = vec![
-        "hip".to_owned(),
-        "hop".to_owned(),
-        "hip".to_owned(),
-        "hop".to_owned(),
-        "hip".to_owned(),
-        "hop".to_owned(),
-        "hipppppo".to_owned(),
-        "hop".to_owned(),
-    ];
-
-    println!("Words are: {:?}", words);
-    let metrics = pollster::block_on(execute_gpu(words));
+    let words = ["hip", "hop", "hip", "hop", "hip", "hop", "hipppppo", "hop"];
+    let metrics = pollster::block_on(levenshtein_gpu(&words));
     print!("Metrics: {:?}", metrics)
 }
 
-pub async fn execute_gpu(words: Vec<String>) -> Vec<u32> {
+/// The function that calls wgpu and takes a vector of words to find the levenshtein distance for them.
+/// It then returns a matrix of distances for each word, in a way of cartesian product.
+pub async fn levenshtein_gpu(words: &[&str]) -> Vec<u32> {
     let mut words_byted: Vec<u32> = Vec::new();
 
     // so, we fill the vector of byted words with zeroes to distinguish between words on the gpu side
-    for w in &words {
+    for w in words {
         assert!(w.len() <= WORDS_PADDING, "word too long");
         // make sure it's u32 cause your shader uses u32
         // just always use u32
