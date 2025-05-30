@@ -419,6 +419,7 @@ dependencies = [
  "pollster",
  "spirv-builder",
  "wgpu",
+ "wgpu-profiler",
 ]
 
 [[package]]
@@ -2089,6 +2090,17 @@ dependencies = [
  "wgpu-types",
  "windows",
  "windows-core",
+]
+
+[[package]]
+name = "wgpu-profiler"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38b3822adea71ba68743babf69de76a0f3c8abe8b08a42f424d55133cacb6130"
+dependencies = [
+ "parking_lot",
+ "thiserror 2.0.12",
+ "wgpu",
 ]
 
 [[package]]
