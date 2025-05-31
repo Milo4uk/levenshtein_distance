@@ -478,7 +478,6 @@ dependencies = [
  "criterion",
  "env_logger",
  "futures-intrusive",
- "levenshtein_shader",
  "pollster",
  "spirv-builder",
  "tokio",

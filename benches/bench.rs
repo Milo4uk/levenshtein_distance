@@ -1,41 +1,53 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use diploma_project::{levenshtein_distance, levenshtein_gpu, LevenshteinGPU};
-
+use diploma_project::{levenshtein_distance_cpu, levenshtein_gpu, LevenshteinGPU};
+use std::fs;
 use pollster::FutureExt as _;
 
-fn bench_levenshtein(c: &mut Criterion) {
-    let gpu = pollster::block_on(LevenshteinGPU::new(4));
-    let mut group = c.benchmark_group("Levenshtein comparison");
-
-    group.sample_size(10);
-
-    let test_cases = [
-        ("small", vec!["kitten", "sitting", "book", "back"]),
-        (
-            "medium",
-            vec!["intention", "execution", "development", "deployment"],
-        ),
-        (
-            "large",
-            vec![
-                "pneumonoultramicroscopicsilicovolcanoconiosis",
-                "pneumonoultramicroscopicsilicovolcanoconioses",
-                "pseudopseudohypoparathyroidism",
-                "supercalifragilisticexpialidocious",
-            ],
-        ),
-    ];
-    for (name, words) in &test_cases {
-        group.bench_function(format!("CPU/{}", name), |b| {
-            b.iter(|| levenshtein_distance(words))
-        });
-
-        group.bench_function(format!("GPU/{}", name), |b| {
-            b.iter(|| levenshtein_gpu(&gpu, words).block_on())
-        });
-    }
-    group.finish();
+fn load_test_cases() -> Vec<(String, Vec<String>)> {
+    let sizes = ["small", "medium", "large"];
+    sizes.iter().map(|size| {
+        let path = format!("./test_data/{}.txt", size);
+        let content = fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("Failed to load {}", path));
+        
+        let words: Vec<String> = content.lines()
+            .flat_map(|line| line.split_whitespace())
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+            
+        (size.to_string(), words)
+    }).collect()
 }
 
-criterion_group!(benches, bench_levenshtein);
+fn config_benchmarks() -> Criterion {
+    Criterion::default()
+        .sample_size(10)
+        .warm_up_time(std::time::Duration::from_secs(1))
+}
+
+fn bench_levenshtein(c: &mut Criterion) {
+    let test_cases = load_test_cases();
+
+    for (size, words) in test_cases {
+        let word_refs: Vec<&str> = words.iter().map(|s| s.as_str()).collect();
+        let mut group = c.benchmark_group(&size);
+        let gpu = pollster::block_on(LevenshteinGPU::new(word_refs.len()));
+
+        group.bench_function(format!("CPU/{}", &size), |b| {
+            b.iter(|| levenshtein_distance_cpu(&word_refs))
+        });
+
+        group.bench_function(format!("GPU/{}", &size), |b| {
+            b.iter(|| levenshtein_gpu(&gpu, &word_refs).block_on())
+        });
+        group.finish();
+    }
+}
+
+criterion_group! {
+    name = benches;
+    config = config_benchmarks();
+    targets = bench_levenshtein
+}
 criterion_main!(benches);

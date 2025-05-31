@@ -1,34 +1,38 @@
-use levenshtein_shader::levenshtein;
-
 pub mod runners;
 pub use runners::wgpu_runner::levenshtein_gpu;
 
 pub const WORDS_PADDING: usize = 64;
 pub const SHADER: &[u8] = include_bytes!(env!("levenshtein_shader.spv"));
 
-// take usual levenshtein for comparison and run it on CPU
-pub fn levenshtein_distance(words: &[&str]) -> Vec<u32> {
-    let number_of_words = words.len();
-    let mut words_byted: Vec<u32> = Vec::with_capacity(number_of_words * WORDS_PADDING);
-    let mut result = vec![0; number_of_words * number_of_words];
+fn levenshtein(a: &str, b: &str) -> u32 {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let a_len = a_chars.len();
+    let b_len = b_chars.len();
 
-    // convert words to fixed-length u32 arrays with padding
-    for w in words {
-        assert!(w.len() <= WORDS_PADDING, "word too long");
-        words_byted.extend(w.chars().map(|c| c as u32));
-        words_byted.extend(std::iter::repeat(0).take(WORDS_PADDING - w.len()));
-    }
+    let mut dp = vec![vec![0; b_len + 1]; a_len + 1];
 
-    // calculate distances for all pairs
-    for pair_idx in 0..number_of_words {
-        let start = pair_idx * WORDS_PADDING;
-        for compared_word_index in 0..number_of_words {
-            let compared_word_start = compared_word_index * WORDS_PADDING;
-            let dist = levenshtein(&words_byted, start, compared_word_start);
-            result[pair_idx * number_of_words + compared_word_index] = dist;
+    for i in 1..=a_len {
+        for j in 1..=b_len {
+            let cost = if a_chars[i-1] == b_chars[j-1] { 0 } else { 1 };
+            dp[i][j] = (dp[i-1][j] + 1)
+                .min(dp[i][j-1] + 1)
+                .min(dp[i-1][j-1] + cost);
         }
     }
-    result
+
+    dp[a_len][b_len]
+}
+
+pub fn levenshtein_distance_cpu(words: &[&str]) -> Vec<u32> {
+    let mut results : Vec<u32>= vec![];
+
+    for word1 in words {
+        for word2 in words {
+            results.push(levenshtein(word1, word2));
+        }
+    }
+    results
 }
 
 #[cfg(test)]
@@ -37,14 +41,14 @@ mod tests {
     #[test]
     fn test_levenshtein() {
         let words = ["kitten", "sitting"];
-        let distances = levenshtein_distance(&words);
+        let distances = levenshtein_distance_cpu(&words);
         assert_eq!(distances, vec![0, 3, 3, 0]);
     }
 
     #[test]
     fn test_empty_words() {
         let words = ["", "test"];
-        let distances = levenshtein_distance(&words);
+        let distances = levenshtein_distance_cpu(&words);
         assert_eq!(distances, vec![0, 4, 4, 0]);
     }
 }

@@ -54,7 +54,7 @@ pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u
     prev[WORDS_PADDING]
 }
 
-#[spirv(compute(threads(32)))]
+#[spirv(compute(threads(64)))]
 pub fn main_cs(
     #[spirv(global_invocation_id)] id: UVec3,
     // слова в байтах единым array

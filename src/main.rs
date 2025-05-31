@@ -2,7 +2,7 @@ use crate::runners::wgpu_runner::levenshtein_gpu;
 use clap::Parser;
 use cli::{Cli, Commands};
 use colored::Colorize;
-use diploma_project::{levenshtein_distance, LevenshteinGPU};
+use diploma_project::{levenshtein_distance_cpu, LevenshteinGPU};
 mod cli;
 pub mod runners;
 
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
                 levenshtein_gpu(&gpu, &words).await
             } else {
                 println!("{}", "Using CPU implementation".yellow());
-                levenshtein_distance(&words)
+                levenshtein_distance_cpu(&words)
             };
 
             print_matrix(&words, &distances);
@@ -51,7 +51,11 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::Bench { size } => {
             println!("{}", "📊 Running benchmarks...".bright_blue());
-            todo!();
+            match size {
+                small => todo!(),
+                medium=> todo!(),
+                large => todo!(),
+            }
         }
     }
     Ok(())
