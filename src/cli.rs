@@ -29,12 +29,16 @@ pub enum Commands {
         /// Show detailed timing
         #[arg(short, long)]
         verbose: bool,
+
+        /// Save to .csv
+        #[arg(short, long)]
+        csv: bool,
     },
 
-    /// Benchmark CPU vs GPU
-    Bench {
-        /// Test cases: "small", "medium", or "large"
-        #[arg(default_value = "small")]
-        size: String,
-    },
+    // /// Benchmark CPU vs GPU
+    // Bench {
+    //     /// Test cases: "small", "medium", or "large"
+    //     #[arg(default_value = "small")]
+    //     size: String,
+    // },
 }

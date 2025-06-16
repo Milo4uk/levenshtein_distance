@@ -2,16 +2,18 @@ use crate::runners::wgpu_runner::levenshtein_gpu;
 use clap::Parser;
 use cli::{Cli, Commands};
 use colored::Colorize;
-use diploma_project::{levenshtein_distance_cpu, LevenshteinGPU};
+use levenshtein_with_gpu::{levenshtein_distance_cpu, save_to_csv, LevenshteinGPU};
 mod cli;
 pub mod runners;
+pub mod draw_graph;
 
-pub const WORDS_PADDING: usize = 64;
+pub const WORDS_PADDING: usize = 32;
 pub const SHADER: &[u8] = include_bytes!(env!("levenshtein_shader.spv"));
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
+    let _ = draw_graph::plot_benchmarks();
     let cli = Cli::parse();
 
     match cli.command {
@@ -20,43 +22,46 @@ async fn main() -> anyhow::Result<()> {
             gpu,
             verbose,
             file,
+            csv,
         } => {
             let start = std::time::Instant::now();
             let content;
             let words: Vec<&str> = if let Some(file_path) = file {
-                // Read words from file
                 content = std::fs::read_to_string(file_path)?;
                 content.split_whitespace().collect() 
             } else {
-                // Use CLI-provided words
                 args.iter().map(|s| s.as_str()).collect()
             };
             let size = words.len();
 
             let distances = if gpu {
-                println!("{}", "Using GPU acceleration".bright_green());
+                println!("{}", "🚀 Using GPU acceleration".bright_green());
                 let gpu = LevenshteinGPU::new(size).await;
                 levenshtein_gpu(&gpu, &words).await
             } else {
-                println!("{}", "Using CPU implementation".yellow());
+                println!("{}", "🐢 Using CPU implementation".yellow());
                 levenshtein_distance_cpu(&words)
             };
 
-            print_matrix(&words, &distances);
+            if csv {
+                save_to_csv(&words, &distances);
+            } else {
+                print_matrix(&words, &distances);
+            }
 
             if verbose {
                 println!("⏱️  Time: {:?}", start.elapsed());
             }
         }
 
-        Commands::Bench { size } => {
-            println!("{}", "📊 Running benchmarks...".bright_blue());
-            match size {
-                small => todo!(),
-                medium=> todo!(),
-                large => todo!(),
-            }
-        }
+        // Commands::Bench { size } => {
+        //     println!("{}", "📊 Running benchmarks...".bright_blue());
+        //     match size {
+        //         small => todo!(),
+        //         medium=> todo!(),
+        //         large => todo!(),
+        //     }
+        // }
     }
     Ok(())
 }

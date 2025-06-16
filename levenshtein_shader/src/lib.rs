@@ -4,7 +4,7 @@ use glam::UVec3;
 use spirv_std::{glam, spirv};
 
 // words padding
-const WORDS_PADDING: usize = 64;
+const WORDS_PADDING: usize = 32;
 
 /// Возвращает метрику, разность по модулю между двумя последовательностями символов
 pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u32 {

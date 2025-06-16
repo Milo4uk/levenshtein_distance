@@ -17,8 +17,6 @@ pub async fn levenshtein_gpu(gpu: &LevenshteinGPU, words: &[&str]) -> Vec<u32> {
         words_byted.extend(core::iter::repeat(0).take(WORDS_PADDING - w.len()));
     }
 
-    // BUFFER_ALIGNMENT is even with 4
-    // make sure it's even with 4
     // we will do cartesian product of 'words'
     let slice_size = std::mem::size_of::<u32>() * (words.len() * words.len());
     let size = slice_size as wgpu::BufferAddress;
@@ -53,7 +51,7 @@ pub async fn levenshtein_gpu(gpu: &LevenshteinGPU, words: &[&str]) -> Vec<u32> {
         cpass.set_pipeline(&gpu.compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
         cpass.insert_debug_marker("compute levenshtein distance");
-        cpass.dispatch_workgroups((words.len() as u32 + 64) / 64, 1, 1);
+        cpass.dispatch_workgroups((words.len() as u32 + 63) / 64, 1, 1);
     }
 
     encoder.copy_buffer_to_buffer(&gpu.output_buffer, 0, &gpu.staging_buffer, 0, size);

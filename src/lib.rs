@@ -1,35 +1,20 @@
 pub mod runners;
+use levenshtein::levenshtein;
+use csv::Writer;
+
 pub use runners::wgpu_runner::levenshtein_gpu;
 
-pub const WORDS_PADDING: usize = 64;
+pub const WORDS_PADDING: usize = 32;
 pub const SHADER: &[u8] = include_bytes!(env!("levenshtein_shader.spv"));
 
-fn levenshtein(a: &str, b: &str) -> u32 {
-    let a_chars: Vec<char> = a.chars().collect();
-    let b_chars: Vec<char> = b.chars().collect();
-    let a_len = a_chars.len();
-    let b_len = b_chars.len();
-
-    let mut dp = vec![vec![0; b_len + 1]; a_len + 1];
-
-    for i in 1..=a_len {
-        for j in 1..=b_len {
-            let cost = if a_chars[i-1] == b_chars[j-1] { 0 } else { 1 };
-            dp[i][j] = (dp[i-1][j] + 1)
-                .min(dp[i][j-1] + 1)
-                .min(dp[i-1][j-1] + cost);
-        }
-    }
-
-    dp[a_len][b_len]
-}
 
 pub fn levenshtein_distance_cpu(words: &[&str]) -> Vec<u32> {
-    let mut results : Vec<u32>= vec![];
-
-    for word1 in words {
-        for word2 in words {
-            results.push(levenshtein(word1, word2));
+    let n = words.len();
+    let mut results = vec![0; n * n];
+    
+    for i in 0..n {
+        for j in 0..n {
+            results[i * n + j] = levenshtein(words[i], words[j]) as u32;
         }
     }
     results
@@ -50,6 +35,13 @@ mod tests {
         let words = ["", "test"];
         let distances = levenshtein_distance_cpu(&words);
         assert_eq!(distances, vec![0, 4, 4, 0]);
+    }
+
+    #[test]
+    fn test_bananas() {
+        let words = ["kitten", "kill", "bananas"];
+        let distances = levenshtein_distance_cpu(&words);
+        assert_eq!(distances, vec![0, 4, 7, 4, 0, 7, 7, 7, 0]);
     }
 }
 
@@ -133,4 +125,34 @@ impl LevenshteinGPU {
             storage_buffer,
         }
     }
+}
+
+#[derive(serde::Serialize)]
+struct LevenshteinRecord {
+    word_a: String,
+    word_b: String,
+    distance: u32,
+}
+
+pub fn save_to_csv(
+    words: &[&str],
+    distances: &[u32],
+) {
+    let mut writer = Writer::from_path("distances.csv").expect("failed to create .csv file");
+    
+    writer.write_record(&["first_word", "second_word", "distance"]).expect("failed to write to .csv file");
+    
+    for (i, word_a) in words.iter().enumerate() {
+        for (j, word_b) in words.iter().enumerate() {
+            if i < j {
+                writer.serialize(LevenshteinRecord {
+                    word_a: word_a.to_string(),
+                    word_b: word_b.to_string(),
+                    distance: distances[i * words.len() + j],
+                }).expect("failed to write to .csv file");
+            }
+        }
+    }
+
+    writer.flush().expect("failed to write to .csv file");
 }

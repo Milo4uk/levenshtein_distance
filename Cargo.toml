@@ -1,5 +1,5 @@
 [package]
-name = "diploma_project"
+name = "levenshtein_with_gpu"
 version = "0.1.0"
 edition = "2021"
 
@@ -18,6 +18,10 @@ clap = { version = "4.0", features = ["derive", "color"] }
 colored = "3.0.0"
 tokio = { version = "1.0", features = ["full"] }
 anyhow = "1.0"
+plotters = "0.3.4"
+csv = "1.2"
+serde = { version = "1.0", features = ["derive"] }
+levenshtein = "1.0.5"
 
 [build-dependencies]
 spirv-builder = { version = "0.9", git = "https://github.com/Rust-GPU/rust-gpu.git" }
