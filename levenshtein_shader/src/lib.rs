@@ -10,16 +10,12 @@ const WORDS_PADDING: usize = 32;
 pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u32 {
     // problems: multi-byte characters in utf-8
     // this only works for ASCII characters
-    // to note: doesn't support slicing
 
     let mut prev = [0u32; WORDS_PADDING + 1];
     let mut curr = [0u32; WORDS_PADDING + 1];
 
-    // базовый алгоритм левенштейна из википедии
+    // алгоритм левенштейна
     for i in 0..WORDS_PADDING {
-        // case when start = 0
-        // we were reading garbage data all along
-        // threads with global indices showed us that
         let a = if i == 0 { 0u32 } else { words[start + i - 1] };
         curr[0] = i as u32;
         for j in 0..WORDS_PADDING {
@@ -35,10 +31,6 @@ pub fn levenshtein(words: &[u32], start: usize, compared_word_start: usize) -> u
             let ins: u32 = prev[j + 1] + 1;
             let sub: u32 = prev[j] + cost;
 
-            // we remove min, cause it causes InvalidTypeWidth(1) error
-            // future note!!!
-            // use THE simplest language, imagine u'r writing in C
-            // imagine like you have one leg shot (u'r the crab) and disabled in means of using Rust
             let best_del_ins = if del < ins { del } else { ins };
             let best = if best_del_ins < sub {
                 best_del_ins
@@ -65,8 +57,6 @@ pub fn main_cs(
     // for each thread it's own id
     let pair_idx = id.x as usize;
     let start = pair_idx * WORDS_PADDING;
-
-    // we will do cartesian product
     let number_of_words = words.len() / WORDS_PADDING;
 
     for compared_word_index in 0..number_of_words {
